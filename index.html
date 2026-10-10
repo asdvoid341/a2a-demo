@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A2A, Explained</title>
+  <meta name="description" content="A working multi-agent trip planner on the left, and a live look at the Agent2Agent (A2A) protocol on the right: agent cards, tasks, streaming and artifacts. Add your own A2A agents.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; worker-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f8a7e'/%3E%3Ccircle cx='10' cy='16' r='4' fill='white'/%3E%3Ccircle cx='22' cy='16' r='4' fill='white'/%3E%3Cpath d='M14 14.5h4M14 17.5h4' stroke='white' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" defer></script>
+  <script type="module" src="src/main.js"></script>
+</head>
+<body data-pane="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true" data-icon="link"></span>
+      <div>
+        <div class="brand-name">A2A, Explained</div>
+        <div class="brand-sub">Agents that talk to other agents, and a live look at the protocol between them<span id="byline"></span></div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="mode-pill" class="mode-pill" data-mode="demo" title="Change provider / model"></button>
+      <button id="start-tour" class="btn ghost" title="Take the 1-minute tour"><span data-icon="compass"></span><span class="hide-sm">Tour</span></button>
+      <button id="open-settings" class="btn ghost" title="Settings"><span data-icon="gear"></span><span class="hide-sm">Settings</span></button>
+      <a id="repo-link" class="btn ghost" href="#" target="_blank" rel="noopener" title="Source on GitHub">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="hide-sm">Source</span>
+      </a>
+    </div>
+  </header>
+
+  <nav class="mobile-tabs" role="tablist" aria-label="Panels">
+    <button role="tab" data-pane="app" aria-selected="true">The app</button>
+    <button role="tab" data-pane="inspector" aria-selected="false" id="mobile-tab-behind">Behind the scenes</button>
+  </nav>
+
+  <main class="split">
+    <!-- ───────────── LEFT: the use case ───────────── -->
+    <section id="app-pane" class="pane app-pane" aria-label="Trip planner">
+      <div class="pane-head">
+        <div>
+          <h1>Trip Planner</h1>
+          <p class="muted">One host agent, several remote agents it can delegate to over A2A.</p>
+        </div>
+        <button id="new-chat" class="btn ghost" title="Start a new conversation (new A2A contexts)"><span data-icon="plus"></span>New chat</button>
+      </div>
+
+      <div class="agentbar" id="agentbar">
+        <span class="agentbar-label">Remote agents</span>
+        <div id="agent-chips" class="agent-chips"></div>
+        <button id="add-agent" class="btn small" title="Connect any A2A agent by URL"><span data-icon="plus"></span>Add agent</button>
+      </div>
+
+      <div id="demo-banner" class="demo-banner">
+        <span><b>Demo mode:</b> a scripted host drives <i>real</i> A2A calls to real agents. Add an API key for a real LLM host.</span>
+        <button id="demo-add-key" class="btn small primary">Use my API key</button>
+      </div>
+
+      <div id="chat" class="chat"><div id="chat-log" class="chat-log" aria-live="polite"></div></div>
+
+      <form id="composer" class="composer">
+        <textarea id="prompt" rows="1" placeholder="Ask the trip planner…  (Enter to send, Shift+Enter for a new line)" aria-label="Message"></textarea>
+        <button id="send" class="btn primary" type="submit" disabled>Send</button>
+        <button id="stop" class="btn danger" type="button" hidden>Stop</button>
+      </form>
+    </section>
+
+    <!-- ───────────── RIGHT: behind the scenes ───────────── -->
+    <section id="inspector-pane" class="pane inspector-pane" aria-label="Behind the scenes">
+      <div class="pane-head">
+        <div>
+          <h2>Behind the scenes <span id="live-indicator" class="live-ind">Idle</span></h2>
+        </div>
+        <div class="seg" role="tablist" aria-label="View">
+          <button role="tab" data-view="simple" aria-selected="true" title="Plain-English live map">Simple</button>
+          <button role="tab" data-view="technical" aria-selected="false" title="Raw JSON-RPC, agent cards and tasks">Technical</button>
+        </div>
+      </div>
+      <p class="thesis">Each agent is a black box, often run by someone else. <b>A2A</b> is the shared language they use to <b>find</b> each other (Agent Cards), <b>hand off work</b> (Tasks) and <b>send back results</b> (Artifacts).</p>
+
+      <div id="kpis" class="kpis" aria-label="Key numbers"></div>
+
+      <div id="simple-view" class="view">
+        <section class="card" id="map-card">
+          <header class="card-head"><h3>Who is talking to whom</h3><span class="card-sub" id="map-sub">Live</span></header>
+          <div id="netmap" class="netmap"></div>
+          <div class="legend" id="map-legend"></div>
+        </section>
+        <section class="card" id="life-card">
+          <header class="card-head"><h3>Task lifecycle</h3><span class="card-sub">Every piece of delegated work is a <b>Task</b> with a state</span></header>
+          <div id="lifecycle" class="lifecycle"></div>
+        </section>
+        <section class="card" id="story-card">
+          <header class="card-head"><h3>What just happened</h3><button class="btn small ghost" id="story-clear" title="Clear">Clear</button></header>
+          <ol id="story" class="story"></ol>
+        </section>
+      </div>
+
+      <div id="tech-view" class="view" hidden>
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="wire" aria-selected="true">Wire</button>
+          <button role="tab" data-tab="cards" aria-selected="false">Agent Cards</button>
+          <button role="tab" data-tab="tasks" aria-selected="false">Tasks</button>
+          <button role="tab" data-tab="host" aria-selected="false">Host model</button>
+          <button role="tab" data-tab="concepts" aria-selected="false">Concepts</button>
+          <span class="spacer"></span>
+          <button id="export-trace" class="btn small ghost" title="Download every event as JSON"><span data-icon="download"></span>Export</button>
+        </div>
+        <div class="tab-panels">
+          <div id="tab-wire" class="tab-panel"></div>
+          <div id="tab-cards" class="tab-panel" hidden></div>
+          <div id="tab-tasks" class="tab-panel" hidden></div>
+          <div id="tab-host" class="tab-panel" hidden></div>
+          <div id="tab-concepts" class="tab-panel" hidden></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ───────────── Add agent ───────────── -->
+  <dialog id="add-dialog" class="dialog wide">
+    <form method="dialog" id="add-form">
+      <h3>Add an A2A agent</h3>
+      <p class="muted">Paste the agent’s base URL or the full URL of its Agent Card. The client looks for <code>/.well-known/agent-card.json</code> (A2A 1.0), then <code>/.well-known/agent.json</code> (0.3).</p>
+      <label class="field">Agent URL
+        <input id="add-url" type="url" placeholder="https://my-agent.example.com" spellcheck="false" autocomplete="off" required>
+      </label>
+      <div class="row">
+        <label class="check"><input id="add-proxy" type="checkbox"> Go through my CORS proxy</label>
+        <span id="add-proxy-hint" class="muted small"></span>
+      </div>
+      <div id="add-preview" class="add-preview" hidden></div>
+      <details class="hint">
+        <summary>Don’t have an agent to try?</summary>
+        <ul>
+          <li>Deploy the companion <b>Phrasebook Agent</b> from the repo’s <code>proxy/</code> folder to Cloudflare (free, one command). It is a real cross-origin A2A 1.0 agent, and the same Worker doubles as a CORS proxy.</li>
+          <li>Run any A2A sample server on your machine, e.g. <code>http://localhost:9999</code>. Localhost is allowed.</li>
+          <li>See the safety checks fire: try <code>https://example.com</code> (no card) or a real agent that needs a login.</li>
+        </ul>
+      </details>
+      <p id="add-error" class="set-error" role="alert"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn ghost" formnovalidate>Cancel</button>
+        <button id="add-fetch" type="button" class="btn">Fetch card</button>
+        <button id="add-confirm" value="add" class="btn primary" disabled>Add agent</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ───────────── Agent details ───────────── -->
+  <dialog id="agent-dialog" class="dialog wide">
+    <div id="agent-detail"></div>
+  </dialog>
+
+  <!-- ───────────── Settings ───────────── -->
+  <dialog id="settings" class="dialog">
+    <form method="dialog">
+      <h3>Host model &amp; network</h3>
+      <p id="set-message" class="set-message" hidden></p>
+      <label class="field">Host agent’s model provider
+        <select id="set-provider"></select>
+      </label>
+      <div id="key-row" class="field-group">
+        <label class="field">API key
+          <input id="set-key" type="password" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="key-meta">
+          <label class="check"><input id="set-remember" type="checkbox"> Remember in this tab only (sessionStorage)</label>
+          <a id="set-keylink" href="#" target="_blank" rel="noopener">Get a key ↗</a>
+        </div>
+        <p class="privacy">Your key is used only in your browser to call the provider directly. It is never sent to any agent or anywhere else. There is no server. Tip: use a key with a low spending limit.</p>
+      </div>
+      <div id="model-row" class="field-group">
+        <label class="field">Model
+          <input id="set-model" list="model-list" spellcheck="false">
+          <datalist id="model-list"></datalist>
+        </label>
+      </div>
+      <div id="effort-row" class="field-group">
+        <label class="field">Effort (Claude)
+          <select id="set-effort"><option value="low">low (cheapest, fastest)</option><option value="medium">medium</option><option value="high">high</option></select>
+        </label>
+      </div>
+      <fieldset>
+        <legend>CORS proxy (optional)</legend>
+        <label class="field">Proxy URL
+          <input id="set-proxy" type="url" placeholder="https://a2a-proxy.you.workers.dev" spellcheck="false">
+        </label>
+        <p class="privacy">Most agents on the internet don’t let web pages call them (no CORS headers). A proxy you deploy yourself (see <code>proxy/</code> in the repo) relays the request. Only agents you tick “use proxy” for go through it.</p>
+      </fieldset>
+      <p id="set-error" class="set-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button id="forget-keys" type="button" class="btn ghost small">Forget all keys</button>
+        <button id="reset-all" type="button" class="btn ghost small" title="Remove added agents and restore defaults">Reset demo</button>
+        <span class="spacer"></span>
+        <button value="cancel" class="btn ghost" formnovalidate>Cancel</button>
+        <button value="save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,8 @@
+name = "a2a-demo-companion"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Comma-separated list of pages allowed to use the CORS proxy, e.g.
+# "https://asdvoid341.github.io,http://localhost:8766". "*" lets any page use it.
+ALLOWED_ORIGINS = "*"
